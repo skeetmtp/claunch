@@ -1,0 +1,13 @@
+[project]
+name = "claunch"
+version = "0.1.0"
+description = "URL scheme handler for Claude Code CLI — opens claunch:// URLs in Ghostty with claude"
+requires-python = ">=3.9"
+dependencies = []
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
