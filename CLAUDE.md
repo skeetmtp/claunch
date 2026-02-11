@@ -8,7 +8,10 @@ Claunch is a macOS `claunch://` URL scheme handler that opens Claude Code CLI in
 It's a hybrid Swift + Python app: Swift handles macOS Apple Event URL dispatch, Python handles
 URL parsing and terminal launching. Zero external dependencies (Python stdlib only).
 
-URL format: `claunch://open?prompt=<url-encoded-prompt>&dir=<url-encoded-path>`
+URL format: `claunch://open?prompt=<url-encoded-prompt>&dir=<url-encoded-path>` or
+`claunch://open?prompt=<url-encoded-prompt>&project=<name>`
+
+See `SPEC.md` for the full technical specification.
 
 ## Build & Install
 
@@ -33,7 +36,9 @@ The app is a macOS `.app` bundle with two layers:
 
 2. **Python handler** (`src/claunch/handler.py`) — Parses the `claunch://` URL, validates
    parameters, writes a temp bash script to `/tmp/claunch_XXXX.sh` (containing `cd` +
-   `exec claude <prompt>`), and launches it in a terminal. Terminal preference:
+   `exec claude <prompt>`), and launches it in a terminal. Reads optional config from
+   `~/.config/claunch/config.json` for terminal preference and project directory mappings.
+   Terminal preference: configurable (`ghostty`/`iterm`/`terminal`), or default fallback chain
    Ghostty CLI -> Ghostty.app -> Terminal.app (AppleScript fallback).
 
 `build.py` compiles the Swift, copies `Info.plist` and `handler.py` into the bundle structure.

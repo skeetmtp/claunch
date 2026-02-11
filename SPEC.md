@@ -12,15 +12,44 @@ Claunch is a macOS tool that registers the `claunch://` custom URL scheme. When 
 
 ```text
 claunch://open?prompt=<url-encoded-prompt>&dir=<url-encoded-path>
+claunch://open?prompt=<url-encoded-prompt>&project=<name>
 ```
 
 | Parameter | Required | Type   | Description                                                  |
 | --------- | -------- | ------ | ------------------------------------------------------------ |
 | `prompt`  | yes      | string | URL-encoded text passed as positional arg to `claude`        |
 | `dir`     | no       | string | URL-encoded absolute path; working directory for the session |
+| `project` | no       | string | Project name mapped to a directory in the config file        |
+
+`dir` and `project` are mutually exclusive — providing both is an error. `project` requires a
+config file with a matching entry (see [Configuration](#configuration) below).
 
 The scheme is `claunch`, the host is `open`. Any other host value is rejected. Standard URL
 encoding applies — spaces as `+` or `%20`, quotes as `%22`, etc.
+
+## Configuration
+
+**Location:** `~/.config/claunch/config.json` (created manually by the user)
+
+The config file is entirely optional — the app works identically to previous behavior without it.
+
+```json
+{
+  "terminal": "ghostty",
+  "projects": {
+    "claunch": "/Users/alban/Developer/claude/claunch",
+    "myapp": "/Users/alban/Developer/myapp"
+  }
+}
+```
+
+| Field      | Required | Type   | Description                                                        |
+| ---------- | -------- | ------ | ------------------------------------------------------------------ |
+| `terminal` | no       | string | `"ghostty"`, `"iterm"`, or `"terminal"`. Overrides fallback chain. |
+| `projects` | no       | object | Map of short project names to absolute directory paths.            |
+
+If `terminal` is set, only that terminal is used (no fallback; errors if unavailable). If omitted,
+the default fallback chain applies (Ghostty → Terminal.app).
 
 ## Architecture
 
@@ -94,21 +123,30 @@ handler.py — parse URL, write script, launch terminal
 
 **Functions:**
 
-| Function              | Signature                               | Description                           |
-| --------------------- | --------------------------------------- | ------------------------------------- |
-| `parse_url`           | `(url: str) -> tuple[str, str \| None]` | Parse/validate URL, return prompt+dir |
-| `write_temp_script`   | `(directory, claude_command) -> str`    | Write temp `.sh` script, return path  |
-| `launch_ghostty`      | `(script_path: str) -> bool`            | Try Ghostty CLI then `open -a`        |
-| `launch_terminal_app` | `(directory, claude_command) -> None`   | Fallback via `osascript` + Terminal   |
-| `main`                | `() -> None`                            | Entry point: parse, build, launch     |
+| Function              | Signature                                                  | Description                         |
+| --------------------- | ---------------------------------------------------------- | ----------------------------------- |
+| `load_config`         | `() -> dict \| None`                                      | Read + validate config JSON         |
+| `parse_url`           | `(url: str, config: dict \| None) -> tuple[str, str \| None]` | Parse/validate URL, return prompt+dir |
+| `write_temp_script`   | `(directory, claude_command) -> str`                       | Write temp `.sh` script, return path |
+| `launch_ghostty`      | `(script_path: str) -> bool`                               | Try Ghostty CLI then `open -a`      |
+| `launch_iterm`        | `(script_path: str) -> bool`                               | Launch iTerm2 via osascript         |
+| `launch_terminal_app` | `(directory, claude_command) -> None`                      | Fallback via `osascript` + Terminal |
+| `launch_in_terminal`  | `(config, script_path, directory, claude_command) -> None` | Route to configured terminal        |
+| `main`                | `() -> None`                                               | Entry point: parse, build, launch   |
 
 **Terminal launching strategy:**
+
+If `terminal` is set in the config file, only that terminal is used (error if unavailable).
+Otherwise the default fallback chain applies:
 
 1. **Ghostty (primary):** Check if `ghostty` CLI is on PATH. If so, use
    `ghostty +new-window --command=<script>`. If the CLI isn't available but
    `/Applications/Ghostty.app` exists, fall back to
    `open -na Ghostty.app --args --command=<script>`.
-2. **Terminal.app (fallback):** Use
+2. **iTerm2 (config only):** If configured, use
+   `osascript -e 'tell application "iTerm2" to create window with default profile command "<script>"'`.
+   Requires `/Applications/iTerm.app`.
+3. **Terminal.app (fallback):** Use
    `osascript -e 'tell application "Terminal" to do script "<command>"'`.
 
 The temp script approach avoids issues with `open -na Ghostty.app --args -e` (tab duplication and
@@ -148,7 +186,7 @@ being embedded in shell commands.
 | ---------------------------- | -------- | ----- | ------ |
 | `pyproject.toml`             | TOML     | 13    | Done   |
 | `src/claunch/__init__.py`    | Python   | 1     | Done   |
-| `src/claunch/handler.py`     | Python   | 109   | Done   |
+| `src/claunch/handler.py`     | Python   | 194   | Done   |
 | `src/claunch/app/main.swift` | Swift    | 48    | Done   |
 | `src/claunch/app/Info.plist` | XML      | 33    | Done   |
 | `build.py`                   | Python   | 60    | Done   |
@@ -173,11 +211,12 @@ Claunch.app/
 | [uv](https://docs.astral.sh/uv/)  | Build + Runtime    | Runs Python scripts; manages Python automatically |
 | swiftc                            | Build-time         | Compile main.swift                                |
 | Ghostty                           | Runtime (optional) | Primary terminal emulator                         |
+| iTerm2                            | Runtime (optional) | Alternative terminal (config only)                |
 | Terminal.app                      | Runtime (fallback) | Fallback terminal                                 |
 | claude CLI                        | Runtime            | The tool being launched                           |
 
-Zero external Python packages. The handler uses only stdlib: `os`, `shlex`, `subprocess`, `sys`,
-`tempfile`, `urllib.parse`.
+Zero external Python packages. The handler uses only stdlib: `json`, `os`, `shlex`, `subprocess`,
+`sys`, `tempfile`, `urllib.parse`.
 
 ## Verification Checklist
 
@@ -191,8 +230,15 @@ Zero external Python packages. The handler uses only stdlib: `os`, `shlex`, `sub
 | 6   | Missing prompt    | `open 'claunch://open'`                             | Error logged, no terminal opens     |
 | 7   | Bad directory     | `open 'claunch://open?prompt=hi&dir=/nonexistent'`  | Error logged, no terminal opens     |
 | 8   | Terminal fallback | Uninstall Ghostty, repeat test 3                    | Terminal.app opens instead          |
+| 9   | Project param    | `open 'claunch://open?prompt=hi&project=test'`      | Opens in project directory          |
+| 10  | Both dir+project | `open 'claunch://open?prompt=hi&dir=/tmp&project=x'` | Error logged, no terminal opens     |
+| 11  | Unknown project  | `open 'claunch://open?prompt=hi&project=nope'`      | Error logged, no terminal opens     |
+| 12  | No config        | Remove config file, repeat test 3                   | Current behavior (Ghostty fallback) |
+| 13  | Terminal config  | Set `"terminal": "terminal"`, repeat test 3         | Terminal.app opens                  |
+| 14  | iTerm config     | Set `"terminal": "iterm"`, repeat test 3            | iTerm2 opens                        |
 
 Test 5 command: `open 'claunch://open?prompt=fix%20the%20bug%20in%20%22main.py%22'`
+Test 9 setup: `mkdir -p ~/.config/claunch && echo '{"projects":{"test":"/tmp"}}' > ~/.config/claunch/config.json`
 
 ## What's Not Yet Done
 
