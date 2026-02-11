@@ -12,7 +12,7 @@ URL format: `claunch://open?prompt=<url-encoded-prompt>&dir=<url-encoded-path>`
 
 ```bash
 # Build the .app bundle (requires Xcode Command Line Tools for swiftc)
-python3 build.py
+uv run build.py
 
 # Install to ~/Applications and register URL scheme with Launch Services
 bash install.sh
@@ -24,7 +24,7 @@ There are no tests, no linter configuration, and no CI/CD pipeline.
 
 The app is a macOS `.app` bundle with two layers:
 
-1. **Swift layer** (`src/claunch/app/main.swift`) — Minimal `NSApplicationDelegate` that registers for `kAEGetURL` Apple Events. On URL open, it extracts the URL string and spawns `/usr/bin/python3 handler.py <url>`, then terminates after the Python process exits.
+1. **Swift layer** (`src/claunch/app/main.swift`) — Minimal `NSApplicationDelegate` that registers for `kAEGetURL` Apple Events. On URL open, it extracts the URL string and spawns `uv run handler.py <url>` (falling back to `/usr/bin/python3` if `uv` is not installed), then terminates after the Python process exits.
 
 2. **Python handler** (`src/claunch/handler.py`) — Parses the `claunch://` URL, validates parameters, writes a temp bash script to `/tmp/claunch_XXXX.sh` (containing `cd` + `exec claude <prompt>`), and launches it in a terminal. Terminal preference: Ghostty CLI → Ghostty.app → Terminal.app (AppleScript fallback).
 

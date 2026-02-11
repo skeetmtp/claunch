@@ -10,6 +10,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
+    func findUV() -> String? {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        let candidates = [
+            "\(home)/.local/bin/uv",
+            "/opt/homebrew/bin/uv",
+            "/usr/local/bin/uv",
+            "\(home)/.cargo/bin/uv",
+        ]
+        for path in candidates {
+            if FileManager.default.isExecutableFile(atPath: path) {
+                return path
+            }
+        }
+        return nil
+    }
+
     @objc func handleGetURL(event: NSAppleEventDescriptor, reply: NSAppleEventDescriptor) {
         guard let urlString = event.paramDescriptor(forKeyword: keyDirectObject)?.stringValue else {
             NSLog("claunch: no URL in Apple Event")
@@ -25,8 +41,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
-        process.arguments = [handlerPath, urlString]
+        if let uvPath = findUV() {
+            process.executableURL = URL(fileURLWithPath: uvPath)
+            process.arguments = ["run", "--no-project", handlerPath, urlString]
+        } else {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/python3")
+            process.arguments = [handlerPath, urlString]
+        }
         process.terminationHandler = { _ in
             DispatchQueue.main.async {
                 NSApplication.shared.terminate(nil)

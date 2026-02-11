@@ -7,7 +7,7 @@ APP_DEST="$HOME/Applications/Claunch.app"
 LSREGISTER="/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister"
 
 if [ ! -d "$APP_SRC" ]; then
-    echo "error: Claunch.app not found. Run 'python3 build.py' first." >&2
+    echo "error: Claunch.app not found. Run 'uv run build.py' first." >&2
     exit 1
 fi
 

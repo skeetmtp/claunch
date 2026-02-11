@@ -24,7 +24,7 @@ The scheme is `claunch`, the host is `open`. Any other host value is rejected. S
 Hybrid Swift + Python design. A thin Swift wrapper handles macOS URL scheme Apple Events (which require a proper `.app` bundle and Cocoa event loop). All URL parsing and terminal launching logic lives in Python, avoiding the need for PyObjC.
 
 ```
-┌─────────────────┐     Apple Event      ┌──────────────────┐     python3     ┌──────────────────┐
+┌─────────────────┐     Apple Event      ┌──────────────────┐    uv run      ┌──────────────────┐
 │  macOS / Browser │ ──── claunch:// ───> │  Claunch (Swift)  │ ────────────> │  handler.py      │
 │                  │                      │  NSApplication    │               │  parse URL       │
 └─────────────────┘                      │  delegates to py  │               │  write script    │
@@ -39,7 +39,7 @@ Hybrid Swift + Python design. A thin Swift wrapper handles macOS URL scheme Appl
 **What it does:**
 - Creates a minimal `NSApplication` with an `NSApplicationDelegate`
 - Registers a handler for `kAEGetURL` Apple Events (the `kInternetEventClass` event that macOS sends when a registered URL scheme is opened)
-- On URL event: extracts the URL string from the Apple Event descriptor, locates `handler.py` in `Bundle.main` Resources, spawns `python3 handler.py <url>` via `Process`
+- On URL event: extracts the URL string from the Apple Event descriptor, locates `handler.py` in `Bundle.main` Resources, spawns `uv run handler.py <url>` via `Process` (falls back to `python3` if `uv` is not installed)
 - Terminates the app after the Python process completes
 
 **Key implementation details:**
@@ -144,7 +144,7 @@ Claunch.app/
 
 | Dependency | Type | Purpose |
 |------------|------|---------|
-| Python 3.9+ | Runtime | handler.py (stdlib only — no pip packages) |
+| [uv](https://docs.astral.sh/uv/) | Build + Runtime | Runs Python scripts; manages Python automatically (falls back to system `python3`) |
 | swiftc | Build-time | Compile main.swift |
 | Ghostty | Runtime (optional) | Primary terminal emulator |
 | Terminal.app | Runtime (fallback) | Fallback terminal |
@@ -156,7 +156,7 @@ Zero external Python packages. The handler uses only stdlib: `os`, `shlex`, `sub
 
 | # | Test | Command | Expected |
 |---|------|---------|----------|
-| 1 | Build | `python3 build.py` | Produces `Claunch.app/` with compiled binary |
+| 1 | Build | `uv run build.py` | Produces `Claunch.app/` with compiled binary |
 | 2 | Install | `bash install.sh` | Copies to `~/Applications/`, registers scheme |
 | 3 | Basic prompt | `open 'claunch://open?prompt=hello+world'` | Ghostty opens, claude starts with "hello world" |
 | 4 | With directory | `open 'claunch://open?prompt=list+files&dir=/tmp'` | claude runs in `/tmp` |
