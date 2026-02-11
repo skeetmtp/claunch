@@ -1,0 +1,13 @@
+[project]
+name = "claunch"
+version = "0.1.0"
+description = "URL scheme handler for Claude Code CLI — opens claunch:// URLs in Ghostty with claude"
+requires-python = ">=3.9"
+dependencies = []
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/claunch"]
