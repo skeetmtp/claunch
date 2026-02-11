@@ -8,8 +8,7 @@ Claunch is a macOS `claunch://` URL scheme handler that opens Claude Code CLI in
 It's a hybrid Swift + Python app: Swift handles macOS Apple Event URL dispatch, Python handles
 URL parsing and terminal launching. Zero external dependencies (Python stdlib only).
 
-URL format: `claunch://open?prompt=<url-encoded-prompt>&dir=<url-encoded-path>` or
-`claunch://open?prompt=<url-encoded-prompt>&project=<name>`
+URL format: `claunch://open?prompt=<url-encoded-prompt>&project=<name>`
 
 See `SPEC.md` for the full technical specification.
 
