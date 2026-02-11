@@ -47,12 +47,22 @@ def copy_resources():
     print("copied Info.plist and handler.py into bundle")
 
 
+def codesign():
+    cmd = ["codesign", "--force", "--sign", "-", APP_DIR]
+    result = subprocess.run(cmd)
+    if result.returncode != 0:
+        print("ad-hoc code signing failed", file=sys.stderr)
+        sys.exit(1)
+    print("ad-hoc signed app bundle")
+
+
 def main():
     print("building Claunch.app...")
     clean()
     create_dirs()
     compile_swift()
     copy_resources()
+    codesign()
     print(f"\nbuild complete: {APP_DIR}")
 
 

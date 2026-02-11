@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """claunch URL handler — parses claunch:// URLs and launches claude in a terminal."""
 
+from __future__ import annotations
+
 import os
 import shlex
 import subprocess
@@ -55,10 +57,12 @@ def launch_ghostty(script_path: str) -> bool:
             ["which", "ghostty"], capture_output=True, text=True
         )
         if result.returncode == 0:
-            subprocess.Popen(
-                ["ghostty", "+new-window", f"--command={script_path}"]
+            result = subprocess.run(
+                ["ghostty", "+new-window", f"--command={script_path}"],
+                capture_output=True,
             )
-            return True
+            if result.returncode == 0:
+                return True
     except FileNotFoundError:
         pass
 

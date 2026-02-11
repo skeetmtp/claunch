@@ -2,12 +2,12 @@ import Cocoa
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSAppleEventManager.shared().setEventHandler(
-            self,
-            andSelector: #selector(handleGetURL(event:reply:)),
-            forEventClass: AEEventClass(kInternetEventClass),
-            andEventID: AEEventID(kAEGetURL)
-        )
+        // Handler already registered before app.run() to avoid race condition
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        guard let url = urls.first else { return }
+        launchHandler(urlString: url.absoluteString)
     }
 
     func findUV() -> String? {
@@ -17,6 +17,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             "/opt/homebrew/bin/uv",
             "/usr/local/bin/uv",
             "\(home)/.cargo/bin/uv",
+            "\(home)/.pyenv/shims/uv",
         ]
         for path in candidates {
             if FileManager.default.isExecutableFile(atPath: path) {
@@ -32,6 +33,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             NSApplication.shared.terminate(nil)
             return
         }
+        launchHandler(urlString: urlString)
+    }
+
+    func launchHandler(urlString: String) {
+        NSLog("claunch: handling URL: %@", urlString)
 
         let bundle = Bundle.main
         guard let handlerPath = bundle.path(forResource: "handler", ofType: "py") else {
@@ -66,4 +72,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 let app = NSApplication.shared
 let delegate = AppDelegate()
 app.delegate = delegate
+
+// Register URL handler BEFORE app.run() to avoid missing events during launch
+NSAppleEventManager.shared().setEventHandler(
+    delegate,
+    andSelector: #selector(AppDelegate.handleGetURL(event:reply:)),
+    forEventClass: AEEventClass(kInternetEventClass),
+    andEventID: AEEventID(kAEGetURL)
+)
+
 app.run()
