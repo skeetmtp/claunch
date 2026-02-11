@@ -15,6 +15,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 CONFIG_PATH = os.path.expanduser("~/.config/claunch/config.json")
 CLAUDE_PROJECTS_DIR = os.path.expanduser("~/.claude/projects")
 VALID_TERMINALS = {"ghostty", "iterm", "terminal"}
+SUPPORTED_VERSIONS = {1}
 
 
 def load_config() -> dict | None:
@@ -249,8 +250,11 @@ def resolve_unknown_project(
     return directory, config
 
 
-def parse_url(url: str, config: dict | None = None) -> tuple[str, str | None, dict | None]:
-    """Parse a claunch:// URL and return (prompt, directory, updated_config)."""
+def parse_url(url: str, config: dict | None = None) -> tuple[str, str | None, int, dict | None]:
+    """Parse a claunch:// URL and return (prompt, directory, version, updated_config).
+
+    The directory is resolved from the 'project' parameter via config or auto-discovery.
+    """
     parsed = urlparse(url)
 
     if parsed.scheme != "claunch":
@@ -266,15 +270,21 @@ def parse_url(url: str, config: dict | None = None) -> tuple[str, str | None, di
         raise ValueError("missing or empty 'prompt' parameter")
     prompt = prompt_values[0]
 
-    dir_values = params.get("dir")
-    directory = dir_values[0] if dir_values and dir_values[0].strip() else None
+    v_values = params.get("v")
+    if not v_values or not v_values[0].strip():
+        raise ValueError("missing required 'v' parameter")
+    try:
+        version = int(v_values[0])
+    except ValueError:
+        raise ValueError(f"invalid 'v' parameter: {v_values[0]!r} (expected integer)")
+
+    if version not in SUPPORTED_VERSIONS:
+        raise ValueError(f"unsupported version: {version} (supported: {sorted(SUPPORTED_VERSIONS)})")
 
     project_values = params.get("project")
     project = project_values[0] if project_values and project_values[0].strip() else None
 
-    if directory and project:
-        raise ValueError("'dir' and 'project' are mutually exclusive")
-
+    directory = None
     if project:
         projects = (config or {}).get("projects") or {}
         if project in projects:
@@ -285,7 +295,7 @@ def parse_url(url: str, config: dict | None = None) -> tuple[str, str | None, di
     if directory and not os.path.isdir(directory):
         raise ValueError(f"directory does not exist: {directory}")
 
-    return prompt, directory, config
+    return prompt, directory, version, config
 
 
 def write_temp_script(directory: str | None, claude_command: str) -> str:
@@ -382,7 +392,7 @@ def main() -> None:
     config = load_config()
 
     try:
-        prompt, directory, config = parse_url(url, config)
+        prompt, directory, version, config = parse_url(url, config)
     except ValueError as e:
         print(f"claunch: {e}", file=sys.stderr)
         sys.exit(1)

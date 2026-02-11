@@ -11,19 +11,17 @@ Claunch is a macOS tool that registers the `claunch://` custom URL scheme. When 
 ## URL Scheme
 
 ```text
-claunch://open?prompt=<url-encoded-prompt>&dir=<url-encoded-path>
-claunch://open?prompt=<url-encoded-prompt>&project=<name>
+claunch://open?prompt=<url-encoded-prompt>&project=<name>&v=<version>
 ```
 
-| Parameter | Required | Type   | Description                                                  |
-| --------- | -------- | ------ | ------------------------------------------------------------ |
-| `prompt`  | yes      | string | URL-encoded text passed as positional arg to `claude`        |
-| `dir`     | no       | string | URL-encoded absolute path; working directory for the session |
-| `project` | no       | string | Project name; resolved from config or auto-discovered        |
+| Parameter | Required | Type   | Default | Description                                           |
+| --------- | -------- | ------ | ------- | ----------------------------------------------------- |
+| `prompt`  | yes      | string | —       | URL-encoded text passed as positional arg to `claude` |
+| `project` | no       | string | —       | Project name; resolved from config or auto-discovered |
+| `v`       | yes      | int    | —       | URL scheme version number (currently only `1`)        |
 
-`dir` and `project` are mutually exclusive — providing both is an error. `project` is first
-looked up in the config file; if not found, auto-discovery scans `~/.claude/projects/` (see
-[Project Auto-Discovery](#project-auto-discovery) below).
+`project` is first looked up in the config file; if not found, auto-discovery scans
+`~/.claude/projects/` (see [Project Auto-Discovery](#project-auto-discovery) below).
 
 The scheme is `claunch`, the host is `open`. Any other host value is rejected. Standard URL
 encoding applies — spaces as `+` or `%20`, quotes as `%22`, etc.
@@ -146,13 +144,12 @@ handler.py — parse URL, write script, launch terminal
 
 - Accepts the full `claunch://` URL as `sys.argv[1]`
 - Parses with `urllib.parse.urlparse` + `parse_qs`
-- Validates: scheme must be `claunch`, host must be `open`, prompt must be non-empty, dir must
-  exist if provided
+- Validates: scheme must be `claunch`, host must be `open`, prompt must be non-empty
 - For unknown `project` names, auto-discovers from `~/.claude/projects/`, shows a picker if
   needed, and saves the mapping to config
 - Constructs the claude command with `shlex.quote` escaping
-- Writes a temporary launcher shell script (`/tmp/claunch_XXXX.sh`) containing `cd <dir>` and
-  `exec claude <prompt>`
+- Writes a temporary launcher shell script (`/tmp/claunch_XXXX.sh`) containing `cd <project-dir>`
+  and `exec claude <prompt>`
 - Attempts to launch Ghostty, falls back to Terminal.app
 
 **Functions:**
@@ -264,25 +261,22 @@ Zero external Python packages. The handler uses only stdlib: `json`, `os`, `shle
 | 1   | Build             | `uv run build.py`                                   | Produces `Claunch.app/` with bin    |
 | 2   | Install           | `bash install.sh`                                   | Copies to `~/Applications/`         |
 | 3   | Basic prompt      | `open 'claunch://open?prompt=hello+world'`          | Ghostty opens, claude starts        |
-| 4   | With directory    | `open 'claunch://open?prompt=list+files&dir=/tmp'`  | claude runs in `/tmp`               |
-| 5   | URL encoding      | See note below                                      | Prompt: `fix the bug in "main.py"`  |
-| 6   | Missing prompt    | `open 'claunch://open'`                             | Error logged, no terminal opens     |
-| 7   | Bad directory     | `open 'claunch://open?prompt=hi&dir=/nonexistent'`  | Error logged, no terminal opens     |
-| 8   | Terminal fallback | Uninstall Ghostty, repeat test 3                    | Terminal.app opens instead          |
-| 9   | Project param     | `open 'claunch://open?prompt=hi&project=test'`      | Opens in project directory          |
-| 10  | Both dir+project  | `open '...?prompt=hi&dir=/tmp&project=x'`           | Error logged, no terminal opens     |
-| 11  | Auto-discover     | `open '...?prompt=hi&project=claunch'`              | Auto-resolves, saved to config      |
-| 12  | Discover picker   | `open '...?prompt=hi&project=rc'`                   | Picker dialog, user selects         |
-| 13  | Cancel picker     | Cancel dialog from test 12                          | Clean exit, no terminal opens       |
-| 14  | No projects dir   | `open '...?prompt=hi&project=nope'`                 | Error if no `~/.claude/projects/`   |
-| 15  | Re-run after save | Repeat test 11                                      | Uses config directly (no discovery) |
-| 16  | No config         | Remove config file, repeat test 3                   | Current behavior (Ghostty fallback) |
-| 17  | Terminal config   | Set `"terminal": "terminal"`, repeat test 3         | Terminal.app opens                  |
-| 18  | iTerm config      | Set `"terminal": "iterm"`, repeat test 3            | iTerm2 opens                        |
+| 4   | URL encoding      | See note below                                      | Prompt: `fix the bug in "main.py"`  |
+| 5   | Missing prompt    | `open 'claunch://open'`                             | Error logged, no terminal opens     |
+| 6   | Terminal fallback | Uninstall Ghostty, repeat test 3                    | Terminal.app opens instead          |
+| 7   | Project param     | `open 'claunch://open?prompt=hi&project=test'`      | Opens in project directory          |
+| 8   | Auto-discover     | `open '...?prompt=hi&project=claunch'`              | Auto-resolves, saved to config      |
+| 9   | Discover picker   | `open '...?prompt=hi&project=rc'`                   | Picker dialog, user selects         |
+| 10  | Cancel picker     | Cancel dialog from test 9                           | Clean exit, no terminal opens       |
+| 11  | No projects dir   | `open '...?prompt=hi&project=nope'`                 | Error if no `~/.claude/projects/`   |
+| 12  | Re-run after save | Repeat test 8                                       | Uses config directly (no discovery) |
+| 13  | No config         | Remove config file, repeat test 3                   | Current behavior (Ghostty fallback) |
+| 14  | Terminal config   | Set `"terminal": "terminal"`, repeat test 3         | Terminal.app opens                  |
+| 15  | iTerm config      | Set `"terminal": "iterm"`, repeat test 3            | iTerm2 opens                        |
 
-Test 5 command: `open 'claunch://open?prompt=fix%20the%20bug%20in%20%22main.py%22'`
-Test 9 setup: `mkdir -p ~/.config/claunch && echo '{"projects":{"test":"/tmp"}}' > ~/.config/claunch/config.json`
-Test 11 setup: remove `claunch` from config `projects` if present
+Test 4 command: `open 'claunch://open?prompt=fix%20the%20bug%20in%20%22main.py%22'`
+Test 7 setup: `mkdir -p ~/.config/claunch && echo '{"projects":{"test":"/tmp"}}' > ~/.config/claunch/config.json`
+Test 8 setup: remove `claunch` from config `projects` if present
 
 ## What's Not Yet Done
 
