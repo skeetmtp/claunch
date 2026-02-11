@@ -7,12 +7,16 @@ and it opens a Ghostty terminal window running `claude` with the prompt from the
 
 ```text
 claunch://open?prompt=<url-encoded-prompt>&dir=<url-encoded-path>
+claunch://open?prompt=<url-encoded-prompt>&project=<name>
 ```
 
-| Parameter | Required | Description                                      |
-|-----------|----------|--------------------------------------------------|
-| `prompt`  | yes      | Passed as positional arg to `claude`             |
-| `dir`     | no       | Working directory (`cd` before running `claude`) |
+| Parameter | Required | Description                                                   |
+|-----------|----------|---------------------------------------------------------------|
+| `prompt`  | yes      | Passed as positional arg to `claude`                          |
+| `dir`     | no       | Working directory (`cd` before running `claude`)              |
+| `project` | no       | Project name; looked up in config or auto-discovered          |
+
+`dir` and `project` are mutually exclusive.
 
 ## Requirements
 
@@ -44,9 +48,21 @@ claunch://open?prompt=explain+this+codebase
 # With working directory
 claunch://open?prompt=list+files&dir=/tmp
 
+# With project name (looked up in config, or auto-discovered)
+claunch://open?prompt=review+the+auth+flow&project=myapp
+
 # URL-encoded special characters
 claunch://open?prompt=fix%20the%20bug%20in%20%22main.py%22
 ```
+
+## Project Auto-Discovery
+
+When you use `project=<name>` and the name isn't in your config, the handler scans
+`~/.claude/projects/` to find a matching directory:
+
+- **Single exact match** (basename equals project name) → auto-selected, no dialog
+- **Multiple matches** → macOS picker dialog
+- The selected mapping is saved to `~/.config/claunch/config.json` for future use
 
 ## How It Works
 

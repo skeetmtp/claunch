@@ -13,6 +13,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 
 
 CONFIG_PATH = os.path.expanduser("~/.config/claunch/config.json")
+CLAUDE_PROJECTS_DIR = os.path.expanduser("~/.claude/projects")
 VALID_TERMINALS = {"ghostty", "iterm", "terminal"}
 
 
@@ -47,8 +48,209 @@ def load_config() -> dict | None:
     return config
 
 
-def parse_url(url: str, config: dict | None = None) -> tuple[str, str | None]:
-    """Parse a claunch:// URL and return (prompt, directory)."""
+def _decode_project_dir_recursive(
+    prefix: str, remainder: str, results: list[str],
+) -> None:
+    """Recursively decode a Claude projects dirname by trying dash-to-slash splits.
+
+    Claude encodes paths like /Users/alban/work/lempire as -Users-alban-work-lempire.
+    This is ambiguous when path components contain dashes (e.g. my-project), so we try
+    all possible splits and check os.path.isdir() to prune.
+
+    The special sequence '--' at the start of a component indicates a dot-prefix
+    (e.g. '--meteor' decodes to '.meteor').
+    """
+    if not remainder:
+        if os.path.isdir(prefix):
+            results.append(prefix)
+        return
+
+    # Try all possible split points: each dash could be a path separator or literal dash
+    i = 0
+    while i < len(remainder):
+        dash_pos = remainder.find("-", i)
+        if dash_pos == -1:
+            # No more dashes — rest is part of current component
+            candidate = prefix + "/" + remainder
+            if os.path.isdir(candidate):
+                results.append(candidate)
+            return
+
+        if dash_pos == 0:
+            # Leading dash(es) indicate a dot-prefixed component.
+            # '--foo' at top-level or '-foo' after a separator split both encode '.foo'.
+            rest = remainder[2:] if remainder.startswith("--") else remainder[1:]
+            if not rest:
+                return
+            next_dash = rest.find("-")
+            if next_dash == -1:
+                candidate = prefix + "/." + rest
+                if os.path.isdir(candidate):
+                    results.append(candidate)
+                return
+            # Try component boundaries — shortest first, then longer
+            component = "." + rest[:next_dash]
+            new_prefix = prefix + "/" + component
+            if os.path.isdir(new_prefix):
+                _decode_project_dir_recursive(new_prefix, rest[next_dash + 1:], results)
+            j = next_dash + 1
+            while j < len(rest):
+                next_dash2 = rest.find("-", j)
+                if next_dash2 == -1:
+                    candidate = prefix + "/." + rest
+                    if os.path.isdir(candidate):
+                        results.append(candidate)
+                    break
+                component = "." + rest[:next_dash2]
+                new_prefix = prefix + "/" + component
+                if os.path.isdir(new_prefix):
+                    _decode_project_dir_recursive(new_prefix, rest[next_dash2 + 1:], results)
+                j = next_dash2 + 1
+            return
+
+        # dash_pos > 0: text before the dash is (part of) a component
+        component = remainder[:dash_pos]
+        new_prefix = prefix + "/" + component
+        # Option A: this dash is a path separator
+        if os.path.isdir(new_prefix):
+            _decode_project_dir_recursive(new_prefix, remainder[dash_pos + 1:], results)
+        # Option B: this dash is literal within the component name — keep scanning
+        i = dash_pos + 1
+
+
+def decode_project_dir(name: str) -> list[str]:
+    """Decode a Claude projects directory name to possible filesystem paths.
+
+    Returns a list of valid directory paths that match the encoded name.
+    """
+    # Strip leading dash (encodes the root '/')
+    if name.startswith("-"):
+        name = name[1:]
+    if not name:
+        return []
+
+    results: list[str] = []
+    _decode_project_dir_recursive("", name, results)
+    return results
+
+
+def discover_claude_projects() -> dict[str, str]:
+    """Scan ~/.claude/projects/ and return {decoded_path: dirname} for valid entries."""
+    if not os.path.isdir(CLAUDE_PROJECTS_DIR):
+        return {}
+
+    discovered: dict[str, str] = {}
+    try:
+        entries = os.listdir(CLAUDE_PROJECTS_DIR)
+    except OSError:
+        return {}
+
+    for entry in entries:
+        full = os.path.join(CLAUDE_PROJECTS_DIR, entry)
+        if not os.path.isdir(full):
+            continue
+        paths = decode_project_dir(entry)
+        for path in paths:
+            discovered[path] = entry
+    return discovered
+
+
+def show_project_picker(project_name: str, candidates: list[str]) -> str | None:
+    """Show a macOS dialog to pick a project directory. Returns selected path or None."""
+    # Build AppleScript that reads paths from argv to avoid injection
+    script = (
+        'on run argv\n'
+        '  set pathList to {}\n'
+        '  repeat with p in argv\n'
+        '    set end of pathList to (p as text)\n'
+        '  end repeat\n'
+        '  set chosen to choose from list pathList '
+        'with title "Claunch" '
+        f'with prompt "Select directory for project \\"{project_name}\\":" '
+        'default items {{item 1 of pathList}}\n'
+        '  if chosen is false then return ""\n'
+        '  return item 1 of chosen\n'
+        'end run'
+    )
+    try:
+        result = subprocess.run(
+            ["osascript", "-e", script, "--"] + candidates,
+            capture_output=True, text=True, timeout=120,
+        )
+    except subprocess.TimeoutExpired:
+        return None
+    if result.returncode != 0 or not result.stdout.strip():
+        return None
+    return result.stdout.strip()
+
+
+def save_project_mapping(config: dict | None, project_name: str, directory: str) -> dict:
+    """Save a project mapping to config. Creates config dir/file if needed. Returns updated config."""
+    config = dict(config) if config else {}
+    projects = dict(config.get("projects") or {})
+    projects[project_name] = directory
+    config["projects"] = projects
+
+    config_dir = os.path.dirname(CONFIG_PATH)
+    os.makedirs(config_dir, exist_ok=True)
+
+    # Atomic write
+    fd, tmp_path = tempfile.mkstemp(dir=config_dir, suffix=".json")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(config, f, indent=2)
+            f.write("\n")
+        os.replace(tmp_path, CONFIG_PATH)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+    return config
+
+
+def resolve_unknown_project(
+    project_name: str, config: dict | None,
+) -> tuple[str, dict | None]:
+    """Discover, pick, and save a project directory for an unknown project name.
+
+    Returns (directory, updated_config). Raises ValueError on failure.
+    """
+    discovered = discover_claude_projects()
+    if not discovered:
+        raise ValueError(
+            f"unknown project: {project_name!r} — not in config and "
+            f"no Claude projects found in {CLAUDE_PROJECTS_DIR}"
+        )
+
+    # Filter candidates: exact basename match → partial → all
+    exact = [p for p in discovered if os.path.basename(p) == project_name]
+    partial = [p for p in discovered if project_name in os.path.basename(p)]
+
+    if exact:
+        candidates = exact
+    elif partial:
+        candidates = partial
+    else:
+        candidates = sorted(discovered.keys())
+
+    # Auto-select if exactly one exact basename match
+    if len(exact) == 1:
+        directory = exact[0]
+    else:
+        candidates = sorted(candidates)
+        directory = show_project_picker(project_name, candidates)
+        if not directory:
+            raise ValueError(f"project selection cancelled for {project_name!r}")
+
+    config = save_project_mapping(config, project_name, directory)
+    return directory, config
+
+
+def parse_url(url: str, config: dict | None = None) -> tuple[str, str | None, dict | None]:
+    """Parse a claunch:// URL and return (prompt, directory, updated_config)."""
     parsed = urlparse(url)
 
     if parsed.scheme != "claunch":
@@ -75,14 +277,15 @@ def parse_url(url: str, config: dict | None = None) -> tuple[str, str | None]:
 
     if project:
         projects = (config or {}).get("projects") or {}
-        if project not in projects:
-            raise ValueError(f"unknown project: {project!r} (not found in config)")
-        directory = projects[project]
+        if project in projects:
+            directory = projects[project]
+        else:
+            directory, config = resolve_unknown_project(project, config)
 
     if directory and not os.path.isdir(directory):
         raise ValueError(f"directory does not exist: {directory}")
 
-    return prompt, directory
+    return prompt, directory, config
 
 
 def write_temp_script(directory: str | None, claude_command: str) -> str:
@@ -179,7 +382,7 @@ def main() -> None:
     config = load_config()
 
     try:
-        prompt, directory = parse_url(url, config)
+        prompt, directory, config = parse_url(url, config)
     except ValueError as e:
         print(f"claunch: {e}", file=sys.stderr)
         sys.exit(1)
