@@ -298,11 +298,30 @@ def parse_url(url: str, config: dict | None = None) -> tuple[str, str | None, in
     return prompt, directory, version, config
 
 
+def find_executable(name: str, extra_candidates: list[str] | None = None) -> str:
+    """Find an executable by checking known paths. Returns full path or bare name as fallback."""
+    home = os.path.expanduser("~")
+    candidates = [
+        os.path.join(home, ".local", "bin", name),
+        f"/opt/homebrew/bin/{name}",
+        f"/usr/local/bin/{name}",
+        os.path.join(home, ".cargo", "bin", name),
+    ]
+    if extra_candidates:
+        candidates.extend(extra_candidates)
+    for path in candidates:
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    return name
+
+
 def write_temp_script(directory: str | None, claude_command: str) -> str:
     """Write a temporary shell script that cd's and runs claude, returning its path."""
     fd, path = tempfile.mkstemp(prefix="claunch_", suffix=".sh")
     with os.fdopen(fd, "w") as f:
         f.write("#!/bin/bash\n")
+        # Ensure common tool directories are in PATH (the app context has minimal PATH)
+        f.write('export PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/local/bin:$PATH"\n')
         if directory:
             f.write(f"cd {shlex.quote(directory)}\n")
         f.write(f"exec {claude_command}\n")
@@ -313,14 +332,12 @@ def write_temp_script(directory: str | None, claude_command: str) -> str:
 def launch_ghostty(script_path: str) -> bool:
     """Try to launch Ghostty with the given script. Returns True on success."""
     # Try ghostty CLI with +new-window first
-    try:
-        result = subprocess.run(
-            ["which", "ghostty"], capture_output=True, text=True
-        )
-        if result.returncode == 0:
+    ghostty_path = find_executable("ghostty", ["/Applications/Ghostty.app/Contents/MacOS/ghostty"])
+    if ghostty_path != "ghostty":
+        try:
             result = subprocess.run(
                 [
-                    "ghostty",
+                    ghostty_path,
                     "+new-window",
                     f"--command={script_path}",
                     "--fullscreen=true",
@@ -330,8 +347,8 @@ def launch_ghostty(script_path: str) -> bool:
             )
             if result.returncode == 0:
                 return True
-    except FileNotFoundError:
-        pass
+        except (FileNotFoundError, OSError):
+            pass
 
     # Fallback: open -a Ghostty with --command flag
     ghostty_app = "/Applications/Ghostty.app"
@@ -411,7 +428,8 @@ def main() -> None:
         print(f"claunch: {e}", file=sys.stderr)
         sys.exit(1)
 
-    claude_command = f"claude {shlex.quote(prompt)}"
+    claude_path = find_executable("claude")
+    claude_command = f"{shlex.quote(claude_path)} {shlex.quote(prompt)}"
     script_path = write_temp_script(directory, claude_command)
     launch_in_terminal(config, script_path, directory, claude_command)
 
