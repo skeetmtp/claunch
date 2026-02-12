@@ -83,6 +83,6 @@ Print a summary:
 ```
 Released v$ARGUMENTS
   GitHub: https://github.com/skeetmtp/claunch/releases/tag/v$ARGUMENTS
-  Homebrew: brew install --cask skeetmtp/tap/claunch
+  Homebrew: brew install --cask skeetmtp/claunch/claunch
   sha256: <the sha256>
 ```

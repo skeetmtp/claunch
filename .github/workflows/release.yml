@@ -42,7 +42,7 @@ jobs:
             ## Install
 
             ```bash
-            brew install --cask skeetmtp/tap/claunch
+            brew install --cask skeetmtp/claunch/claunch
             ```
 
             Or download `Claunch.zip`, unzip, and move `Claunch.app` to `~/Applications/`.

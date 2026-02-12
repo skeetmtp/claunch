@@ -17,30 +17,32 @@ claunch://open?v=1&prompt=<url-encoded-prompt>&project=<name>
 
 ## Requirements
 
-- macOS (Apple Event URL scheme handling)
-- [uv](https://docs.astral.sh/uv/) (manages Python automatically; falls back to system `python3` at runtime)
-- Xcode Command Line Tools (`swiftc`)
+- macOS 12+ (Monterey or later)
 - [Ghostty](https://ghostty.org) terminal (falls back to Terminal.app)
 - [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) (`claude` on PATH)
 
-## Quick Start
+## Install
 
-### Install with Homebrew (recommended)
+### Homebrew (recommended)
 
 ```bash
-brew install --cask skeetmtp/tap/claunch
+brew install --cask skeetmtp/claunch/claunch
 ```
 
-### Build from source
+### From source
+
+Requires [uv](https://docs.astral.sh/uv/) and Xcode Command Line Tools (`swiftc`).
 
 ```bash
-# Build the .app bundle
+git clone https://github.com/skeetmtp/claunch.git
+cd claunch
 uv run build.py
-
-# Install to ~/Applications and register the URL scheme
 bash install.sh
+```
 
-# Test it
+### Test it
+
+```bash
 open 'claunch://open?v=1&prompt=hello+world'
 ```
 
@@ -83,6 +85,7 @@ claunch/
 ├── pyproject.toml              # Package metadata (no external deps)
 ├── build.py                    # Compile Swift + assemble .app bundle
 ├── install.sh                  # Copy to ~/Applications + register URL scheme
+├── uninstall.sh                # Remove from ~/Applications + unregister
 └── src/
     └── claunch/
         ├── __init__.py
@@ -106,6 +109,14 @@ Claunch.app/
 
 ## Uninstall
 
+If installed with Homebrew:
+
 ```bash
-rm -rf ~/Applications/Claunch.app
+brew uninstall --cask claunch
+```
+
+If installed from source:
+
+```bash
+bash uninstall.sh
 ```
