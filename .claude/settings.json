@@ -2,6 +2,7 @@
   "permissions": {
     "allow": [
       "Bash(git:*)",
+      "Bash(npx markdownlint-cli2:*)",
       "Bash(uv run:*)"
     ]
   }
