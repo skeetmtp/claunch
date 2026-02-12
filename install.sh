@@ -43,4 +43,4 @@ else
 fi
 
 echo ""
-echo "done. test with: open 'claunch://open?prompt=hello+world'"
+echo "done. test with: open 'claunch://open?v=1&prompt=hello+world'"

@@ -6,11 +6,12 @@ and it opens a Ghostty terminal window running `claude` with the prompt from the
 ## URL Format
 
 ```text
-claunch://open?prompt=<url-encoded-prompt>&project=<name>
+claunch://open?v=1&prompt=<url-encoded-prompt>&project=<name>
 ```
 
 | Parameter | Required | Description                                          |
 |-----------|----------|------------------------------------------------------|
+| `v`       | yes      | URL scheme version (currently `1`)                   |
 | `prompt`  | yes      | Passed as positional arg to `claude`                 |
 | `project` | no       | Project name; looked up in config or auto-discovered |
 
@@ -32,20 +33,20 @@ uv run build.py
 bash install.sh
 
 # Test it
-open 'claunch://open?prompt=hello+world'
+open 'claunch://open?v=1&prompt=hello+world'
 ```
 
 ## Examples
 
 ```text
 # Basic prompt
-claunch://open?prompt=explain+this+codebase
+claunch://open?v=1&prompt=explain+this+codebase
 
 # With project name (looked up in config, or auto-discovered)
-claunch://open?prompt=review+the+auth+flow&project=myapp
+claunch://open?v=1&prompt=review+the+auth+flow&project=myapp
 
 # URL-encoded special characters
-claunch://open?prompt=fix%20the%20bug%20in%20%22main.py%22
+claunch://open?v=1&prompt=fix%20the%20bug%20in%20%22main.py%22
 ```
 
 ## Project Auto-Discovery

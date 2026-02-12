@@ -272,7 +272,7 @@ def parse_url(url: str, config: dict | None = None) -> tuple[str, str | None, in
 
     v_values = params.get("v")
     if not v_values or not v_values[0].strip():
-        raise ValueError("missing required 'v' parameter")
+        raise ValueError("missing required 'v' parameter (e.g. v=1)")
     try:
         version = int(v_values[0])
     except ValueError:
@@ -319,7 +319,13 @@ def launch_ghostty(script_path: str) -> bool:
         )
         if result.returncode == 0:
             result = subprocess.run(
-                ["ghostty", "+new-window", f"--command={script_path}"],
+                [
+                    "ghostty",
+                    "+new-window",
+                    f"--command={script_path}",
+                    "--fullscreen=true",
+                    "--macos-non-native-fullscreen=visible-menu",
+                ],
                 capture_output=True,
             )
             if result.returncode == 0:
@@ -333,7 +339,15 @@ def launch_ghostty(script_path: str) -> bool:
         return False
 
     subprocess.Popen(
-        ["open", "-na", "Ghostty.app", "--args", f"--command={script_path}"]
+        [
+            "open",
+            "-na",
+            "Ghostty.app",
+            "--args",
+            f"--command={script_path}",
+            "--fullscreen=true",
+            "--macos-non-native-fullscreen=visible-menu",
+        ]
     )
     return True
 

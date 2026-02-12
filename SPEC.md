@@ -11,14 +11,14 @@ Claunch is a macOS tool that registers the `claunch://` custom URL scheme. When 
 ## URL Scheme
 
 ```text
-claunch://open?prompt=<url-encoded-prompt>&project=<name>&v=<version>
+claunch://open?v=<version>&prompt=<url-encoded-prompt>&project=<name>
 ```
 
 | Parameter | Required | Type   | Default | Description                                           |
 | --------- | -------- | ------ | ------- | ----------------------------------------------------- |
+| `v`       | yes      | int    | —       | URL scheme version number (currently only `1`)        |
 | `prompt`  | yes      | string | —       | URL-encoded text passed as positional arg to `claude` |
 | `project` | no       | string | —       | Project name; resolved from config or auto-discovered |
-| `v`       | yes      | int    | —       | URL scheme version number (currently only `1`)        |
 
 `project` is first looked up in the config file; if not found, auto-discovery scans
 `~/.claude/projects/` (see [Project Auto-Discovery](#project-auto-discovery) below).
@@ -260,21 +260,21 @@ Zero external Python packages. The handler uses only stdlib: `json`, `os`, `shle
 | --- | ----------------- | --------------------------------------------------- | ----------------------------------- |
 | 1   | Build             | `uv run build.py`                                   | Produces `Claunch.app/` with bin    |
 | 2   | Install           | `bash install.sh`                                   | Copies to `~/Applications/`         |
-| 3   | Basic prompt      | `open 'claunch://open?prompt=hello+world'`          | Ghostty opens, claude starts        |
+| 3   | Basic prompt      | `open 'claunch://open?v=1&prompt=hello+world'`      | Ghostty opens, claude starts        |
 | 4   | URL encoding      | See note below                                      | Prompt: `fix the bug in "main.py"`  |
-| 5   | Missing prompt    | `open 'claunch://open'`                             | Error logged, no terminal opens     |
+| 5   | Missing prompt    | `open 'claunch://open?v=1'`                         | Error logged, no terminal opens     |
 | 6   | Terminal fallback | Uninstall Ghostty, repeat test 3                    | Terminal.app opens instead          |
-| 7   | Project param     | `open 'claunch://open?prompt=hi&project=test'`      | Opens in project directory          |
-| 8   | Auto-discover     | `open '...?prompt=hi&project=claunch'`              | Auto-resolves, saved to config      |
-| 9   | Discover picker   | `open '...?prompt=hi&project=rc'`                   | Picker dialog, user selects         |
+| 7   | Project param     | `open 'claunch://open?v=1&prompt=hi&project=test'`  | Opens in project directory          |
+| 8   | Auto-discover     | `open '...?v=1&prompt=hi&project=claunch'`          | Auto-resolves, saved to config      |
+| 9   | Discover picker   | `open '...?v=1&prompt=hi&project=rc'`               | Picker dialog, user selects         |
 | 10  | Cancel picker     | Cancel dialog from test 9                           | Clean exit, no terminal opens       |
-| 11  | No projects dir   | `open '...?prompt=hi&project=nope'`                 | Error if no `~/.claude/projects/`   |
+| 11  | No projects dir   | `open '...?v=1&prompt=hi&project=nope'`             | Error if no `~/.claude/projects/`   |
 | 12  | Re-run after save | Repeat test 8                                       | Uses config directly (no discovery) |
 | 13  | No config         | Remove config file, repeat test 3                   | Current behavior (Ghostty fallback) |
 | 14  | Terminal config   | Set `"terminal": "terminal"`, repeat test 3         | Terminal.app opens                  |
 | 15  | iTerm config      | Set `"terminal": "iterm"`, repeat test 3            | iTerm2 opens                        |
 
-Test 4 command: `open 'claunch://open?prompt=fix%20the%20bug%20in%20%22main.py%22'`
+Test 4 command: `open 'claunch://open?v=1&prompt=fix%20the%20bug%20in%20%22main.py%22'`
 Test 7 setup: `mkdir -p ~/.config/claunch && echo '{"projects":{"test":"/tmp"}}' > ~/.config/claunch/config.json`
 Test 8 setup: remove `claunch` from config `projects` if present
 
@@ -289,3 +289,11 @@ Test 8 setup: remove `claunch` from config `projects` if present
   and the `open -na` fallback need testing on an actual Mac to confirm which path works; the
   handler tries both
 - **Temp script cleanup** — launcher scripts in `/tmp` are not cleaned up after use
+
+## Notes
+
+You can test the Ghostty launch strategy with:
+
+```bash
+open -na ghostty --args --title=ghostty-from-vscode --working-directory="$(pwd)" --initial-window --fullscreen
+```
