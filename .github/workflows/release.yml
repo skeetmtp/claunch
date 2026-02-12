@@ -1,0 +1,50 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Build universal binary
+        run: uv run build.py --universal
+
+      - name: Verify universal binary
+        run: |
+          lipo -info Claunch.app/Contents/MacOS/Claunch
+          codesign -vvv Claunch.app
+
+      - name: Create zip
+        run: ditto -c -k --keepParent Claunch.app Claunch.zip
+
+      - name: Compute sha256
+        id: sha
+        run: |
+          SHA=$(shasum -a 256 Claunch.zip | awk '{print $1}')
+          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
+          echo "sha256: $SHA"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: Claunch.zip
+          body: |
+            ## Install
+
+            ```bash
+            brew install --cask skeetmtp/tap/claunch
+            ```
+
+            Or download `Claunch.zip`, unzip, and move `Claunch.app` to `~/Applications/`.
+
+            **sha256:** `${{ steps.sha.outputs.sha256 }}`
