@@ -25,6 +25,14 @@ claunch://open?v=1&prompt=<url-encoded-prompt>&project=<name>
 
 ## Quick Start
 
+### Install with Homebrew (recommended)
+
+```bash
+brew install --cask skeetmtp/tap/claunch
+```
+
+### Build from source
+
 ```bash
 # Build the .app bundle
 uv run build.py

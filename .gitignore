@@ -1,5 +1,6 @@
 # Build artifacts
 Claunch.app/
+Claunch.zip
 
 # Python
 __pycache__/
